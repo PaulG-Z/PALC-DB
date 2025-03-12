@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Poly(A) Length & Composition Database</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+    }
+    header {
+      background-color: #FFFFFF;
+      color: black;
+      padding: 20px;
+      text-align: center;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 80px;
+    }
+    header h1 {
+      margin: 0;
+    }
+    header .left-image {
+      position: absolute;
+      left: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    header .right-image {
+      position: absolute;
+      right: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    nav {
+      background-color: #333;
+      padding: 10px;
+      text-align: center;
+    }
+    nav a {
+      color: white;
+      text-decoration: none;
+      margin: 0 15px;
+      font-size: 16px;
+      padding: 5px 10px;
+      display: inline-block;
+    }
+    nav a:hover {
+      text-decoration: underline;
+    }
+    nav .dropdown {
+      display: inline-block;
+      position: relative;
+      padding: 5px 10px;
+    }
+    nav .dropdown-button {
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      display: inline-block;
+    }
+    nav .dropdown-content {
+      display: none;
+      position: absolute;
+      background-color: white;
+      min-width: 160px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+      z-index: 1;
+    }
+    nav .dropdown-content select {
+      width: 100%;
+      padding: 5px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    nav .dropdown.open .dropdown-content {
+      display: block;
+    }
+    .search-box {
+      text-align: center;
+      margin: 20px 0;
+    }
+    .search-box input[type="text"] {
+      padding: 10px;
+      font-size: 16px;
+      width: 500px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .search-box button {
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #4071C8;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .search-box button:hover {
+      background-color: #305a9e;
+    }
+    .result {
+      margin: 20px auto;
+      width: 80%;
+      background-color: white;
+      padding: 20px;
+      border-radius: 4px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      overflow-x: auto;
+      margin-bottom: 60px;
+    }
+    footer {
+      background-color: #333;
+      color: white;
+      text-align: center;
+      padding: 10px;
+      position: relative;
+      bottom: 0;
+      width: 100%;
+      margin-top: 30px;
+    }
+    #page-container {
+      position: relative;
+      min-height: 100vh;
+    }
+    .upload-box {
+      display: none;
+      text-align: center;
+      margin-top: 20px;
+    }
+    .upload-box input[type="file"] {
+      padding: 10px;
+      font-size: 16px;
+    }
+    .upload-box button {
+      background-color: #4071C8;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+    .upload-box button:hover {
+      background-color: #0056b3;
+    }
+    #coverImage {
+      max-width: 100%;
+      margin-top: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    table, th, td {
+      border: 1px solid #ddd;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+    }
+    th {
+      background-color: #f4f4f4;
+    }
+    .custom-upload-btn {
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #4071C8;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 5px;
+    }
+    .custom-upload-btn:hover {
+      background-color: #305a9e;
+    }
+    .file-info {
+      color: black;
+      font-size: 14px;
+      margin-left: 5px;
+      margin-right: 5px;
+    }
+    .gene-upload-btn {
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 0 10px;
+    }
+    .gene-upload-btn:hover {
+      background-color: #45a049;
+    }
+    .file-info {
+      color: black;
+      font-size: 14px;
+      margin-top: 5px;
+    }
+    #igv-container {
+      width: 90%;
+      height: 500px;
+      margin: 20px auto;
+      border: 1px solid #ddd;
+      display: none;
+    }
+  </style>
+  <!-- 引入IGV.js -->
+  <script src="https://cdn.jsdelivr.net/npm/igv@3.2.3/dist/igv.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/igv@3.2.3/dist/igv.css">
+</head>
+<body>
+  <header>
+    <a href="http://lulab.genetics.ac.cn/" target="_blank">
+      <img src="./logo2.png" alt="Left Image" class="left-image">
+    </a>
+    <h1>Poly(A) Length & Composition Database</h1>
+    <a href="https://github.com/PaulG-Z/PALC-DB" target="_blank">
+      <img src="./PALC-logo.png" alt="Right Image" class="right-image">
+    </a>
+  </header>
+
+  <nav>
+    <a href="#" id="homeLink" onclick="resetPage()">Home</a>
+    <div class="dropdown" id="speciesDropdown">
+      <span class="dropdown-button" onclick="toggleDropdown('speciesDropdown')">Species</span>
+      <div class="dropdown-content">
+        <select id="speciesSelect" onchange="selectSpecies()">
+          <option value="">select</option>
+          <!-- 后台提交值为 mouse/human，但显示完整名称 -->
+          <option value="mouse">Mus musculus</option>
+          <option value="human">Homo sapiens</option>
+        </select>
+      </div>
+    </div>
+    <div class="dropdown" id="tissueDropdown">
+      <span class="dropdown-button" onclick="toggleDropdown('tissueDropdown')">Tissues</span>
+      <div class="dropdown-content">
+        <select id="tissueSelect" onchange="selectTissue()">
+          <option value="">select</option>
+        </select>
+      </div>
+    </div>
+    <div class="dropdown" id="toolsDropdown">
+      <span class="dropdown-button" onclick="toggleDropdown('toolsDropdown')">Tools</span>
+      <div class="dropdown-content">
+        <select id="toolsSelect" onchange="selectTool()">
+          <option value="">select</option>
+          <option value="poly(A) extraction">poly(A) extraction</option>
+        </select>
+      </div>
+    </div>
+    <a href="#" id="helpLink" onclick="showHelp()">Help</a>
+  </nav>
+
+  <div class="upload-box" id="uploadBox">
+    <h3>Upload BAM File</h3>
+    <form id="uploadForm" enctype="multipart/form-data">
+        <button type="button" onclick="document.getElementById('fileInput').click()" class="custom-upload-btn">
+            Choose File
+        </button>
+        <input type="file" name="bamFile" id="fileInput" accept=".bam" required style="display: none;" onchange="updateFileName(this)" />
+        <span id="fileName" class="file-info">No file chosen</span>
+        <input type="hidden" name="tool" value="polyA_extraction" />
+        <button type="button" onclick="submitUpload()">Submit</button>
+    </form>
+    <div id="uploadStatus"></div>
+  </div>
+
+  <div class="search-box" id="searchBox">
+    <input type="text" id="searchInput" placeholder="Ensembl ID / Symbol（example：ENSMUSG00000000001 / Gnai3）">
+    <button class="gene-upload-btn" onclick="document.getElementById('geneFile').click()">Upload Gene File</button>
+    <input type="file" id="geneFile" style="display: none;" accept=".txt,.csv" onchange="handleGeneFile(event)">
+    <button onclick="performSearch()">submit</button>
+    <div id="fileInfo" class="file-info"></div>
+  </div>
+
+  <div class="result" id="result">
+    <img src="./PALC-logo2.png" alt="Cover Image" id="coverImage">
+  </div>
+  <!-- IGV容器 -->
+  <div id="igv-container"></div>
+  <footer>
+    <p>&copy; 2025 Poly(A) Length & Composition Database</p>
+  </footer>
+
+  <script>
+    // 组织选项：每个选项包含后台值（value）和显示名称（display）
+    const tissueOptions = {
+      mouse: [
+        { value: "GV", display: "GV oocyte" },
+        { value: "MI", display: "MI oocyte" },
+        { value: "MII", display: "MII oocyte" },
+        { value: "1C", display: "1-cell" },
+        { value: "2C", display: "2-cell" },
+        { value: "4C", display: "4-cell" },
+        { value: "8C", display: "8-cell" },
+        { value: "Morula", display: "Morula" },
+        { value: "Blastocyst", display: "Blastocyst" },
+        { value: "NIH3T3", display: "NIH3T3 cell" },
+        { value: "ESC", display: "mESC" },
+        { value: "BAT", display: "Brown adipose tissue" },
+        { value: "Brain", display: "Brain" },
+        { value: "Epididymis", display: "Epididymis" },
+        { value: "Heart", display: "Heart" },
+        { value: "Intestine", display: "Intestine" },
+        { value: "Kidney", display: "Kidney" },
+        { value: "Liver", display: "Liver" },
+        { value: "Lung", display: "Lung" },
+        { value: "Muscle", display: "Muscle" },
+        { value: "Ovary", display: "Ovary" },
+        { value: "Oviduct", display: "Oviduct" },
+        { value: "Spleen", display: "Spleen" },
+        { value: "Testis", display: "Testis" },
+        { value: "Uterus", display: "Uterus" },
+        { value: "WAT", display: "White adipose tissue" }
+      ],
+      human: [
+        { value: "GV", display: "GV oocyte" },
+        { value: "MI", display: "MI oocyte" },
+        { value: "MII", display: "MII oocyte" },
+        { value: "1C", display: "1-cell" },
+        { value: "2C", display: "2-cell" },
+        { value: "4C", display: "4-cell" },
+        { value: "8C", display: "8-cell" },
+        { value: "Morula", display: "Morula" },
+        { value: "Blastocyst", display: "Blastocyst" },
+        { value: "Hela", display: "HeLa cell" },
+        { value: "iPSC", display: "hiPSC" }
+      ]
+    };
+
+    const speciesSelect = document.getElementById('speciesSelect');
+    const tissueSelect = document.getElementById('tissueSelect');
+    const toolsSelect = document.getElementById('toolsSelect');
+    const uploadBox = document.getElementById('uploadBox');
+    const resultDiv = document.getElementById('result');
+    const coverImage = document.getElementById('coverImage');
+    const body = document.body;
+    let geneList = [];
+
+    // IGV相关变量
+    let igvBrowser = null;
+    const genomeMap = { mouse: "mm10", human: "hg38" };
+
+    // IGV初始化函数：只创建或更新一个IGV窗口，并使用定位区域
+    async function initializeIGV(species, tissue, locus) {
+      const igvContainer = document.getElementById('igv-container');
+      igvContainer.style.display = 'block';
+      // 生成BAM文件路径，假设路径为 /IGV_bam/{species}_{tissue}.bam
+      const bamFilePath = `/IGV_bam/${species}_${tissue}.bam`;
+      const indexFilePath = `${bamFilePath}.bai`;
+      const options = {
+        genome: genomeMap[species],
+        locus: locus,
+        tracks: [{
+          type: "alignment",
+          format: "bam",
+          url: bamFilePath,
+          indexURL: indexFilePath,
+          name: `${species} ${tissue} BAM`,
+          visibilityWindow: 1000000
+        }]
+      };
+      if (igvBrowser) {
+        await igvBrowser.removeAllTracks();
+        await igvBrowser.loadTrack(options.tracks[0]);
+        igvBrowser.search(locus);
+      } else {
+        try {
+          igvBrowser = await igv.createBrowser(igvContainer, options);
+        } catch (err) {
+          console.error("IGV Initialization failed:", err);
+          alert("BAM file loading failed");
+        }
+      }
+    }
+
+    function toggleDropdown(id) {
+      const dropdown = document.getElementById(id);
+      dropdown.classList.toggle('open');
+    }
+
+    function selectSpecies() {
+      const species = speciesSelect.value;
+      const speciesDropdown = document.getElementById('speciesDropdown');
+      if (species) {
+        speciesDropdown.querySelector('.dropdown-button').textContent = (species === "mouse") ? "Mus musculus" : "Homo sapiens";
+        toggleDropdown('speciesDropdown');
+        updateTissues(species);
+      }
+    }
+
+    function selectTissue() {
+      const tissueValue = tissueSelect.value;
+      const tissueDropdown = document.getElementById('tissueDropdown');
+      if (tissueValue) {
+        const selected = tissueOptions[speciesSelect.value].find(item => item.value === tissueValue);
+        tissueDropdown.querySelector('.dropdown-button').textContent = selected ? selected.display : tissueValue;
+        toggleDropdown('tissueDropdown');
+      }
+    }
+
+    function selectTool() {
+      const tool = toolsSelect.value;
+      const toolsDropdown = document.getElementById('toolsDropdown');
+      if (tool) {
+        toolsDropdown.querySelector('.dropdown-button').textContent = tool;
+        toggleDropdown('toolsDropdown');
+        if (tool === 'poly(A) extraction') {
+          uploadBox.style.display = 'block';
+          document.getElementById('searchBox').style.display = 'block';
+        }
+      }
+    }
+
+    function updateTissues(species) {
+      tissueSelect.innerHTML = '<option value="">select</option>';
+      if (species && tissueOptions[species]) {
+        tissueOptions[species].forEach(item => {
+          const option = document.createElement('option');
+          option.value = item.value;
+          option.textContent = item.display;
+          tissueSelect.appendChild(option);
+        });
+      }
+    }
+
+    function updateFileName(input) {
+      const fileNameSpan = document.getElementById('fileName');
+      if (input.files.length > 0) {
+        fileNameSpan.textContent = input.files[0].name;
+      } else {
+        fileNameSpan.textContent = 'No file chosen';
+      }
+    }
+    // 处理上传的 gene list 文件：将所有 gene ID 存入 geneList
+    function handleGeneFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const content = e.target.result;
+        geneList = content.split(/[\n,]+/).filter(g => g.trim());
+        if (geneList.length > 1500) {
+          alert('The number of genes  cannot exceed 1500！');
+          geneList = [];
+          document.getElementById('fileInfo').textContent = '';
+          return;
+        }
+        document.getElementById('fileInfo').textContent = `Uploaded ${geneList.length} genes`;
+      };
+      reader.readAsText(file);
+    }
+
+    // 搜索功能：调用 search.php，显示前6条结果，并使用检索结果中第一个有效 symbol 作为 IGV 定位区域
+    function performSearch() {
+      const species = speciesSelect.value;
+      const tissue = tissueSelect.value;
+      let searchTerm = geneList.length > 0 ? geneList.join(',') : document.getElementById('searchInput').value.trim();
+      if (!searchTerm) {
+        alert('please input gene or upload gene list.');
+        return;
+      }
+      if (species && tissue && searchTerm) {
+        const params = `species=${encodeURIComponent(species)}&tissue=${encodeURIComponent(tissue)}&search_term=${encodeURIComponent(searchTerm)}`;
+        fetch('search.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params
+        })
+          .then(response => response.json())
+          .then(data => {
+            if (data.error) {
+              alert(data.error);
+              return;
+            }
+            const displayData = data.slice(0, 11); // 显示前6条
+            let html = `<h2>results（presentation the first 6，total: ${data.length}）</h2>
+                        <p>物种：<strong>${species === "mouse" ? "Mus musculus" : "Homo sapiens"}</strong></p>
+                        <p>组织：<strong>${tissueSelect.options[tissueSelect.selectedIndex].text}</strong></p>
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Ensembl ID</th>
+                              <th>Symbol</th>
+                              <th>Gene Type</th>
+                              <th>RNAseq FPKM</th>
+                              <th>Riboseq FPKM</th>
+                              <th>TE</th>
+                              <th>PAL</th>
+                              <th>Uratio</th>
+                              <th>Cratio</th>
+                              <th>Gratio</th>
+                            </tr>
+                          </thead>
+                          <tbody>`;
+            displayData.forEach(item => {
+              html += `<tr>
+                          <td>${item.ensembl_ID}</td>
+                          <td>${item.symbol}</td>
+                          <td>${item.gene_type}</td>
+                          <td>${item.RNAseq_FPKM}</td>
+                          <td>${item.Riboseq_FPKM}</td>
+                          <td>${item.TE}</td>
+                          <td>${item.PAL}</td>
+                          <td>${item.Uratio}</td>
+                          <td>${item.Cratio}</td>
+                          <td>${item.Gratio}</td>
+                        </tr>`;
+            });
+            html += `</tbody></table>
+                     <button onclick="downloadResults()">download output（total: ${data.length}）</button>`;
+            resultDiv.innerHTML = html;
+            coverImage.style.display = 'none';
+
+            // 始终使用检索结果中第一个有效的 symbol 作为 IGV 定位区域，
+            // 如果返回结果中第一个 symbol 存在且不以 "ENS" 开头，则使用，否则使用默认 "BRCA1"
+            let locus;
+            if (data.length > 0 && data[0].symbol && !data[0].symbol.startsWith("ENS")) {
+              locus = data[0].symbol;
+            } else {
+              locus = "BRCA1";
+            }
+            initializeIGV(species, tissue, locus);
+          })
+          .catch(error => {
+            console.error("Error:", error);
+            alert("Request failed, please try again later");
+          });
+      } else {
+        alert("Please select a species, organization, and enter the gene name!");
+      }
+    }
+
+    // 下载功能（保持不变）
+    function downloadResults() {
+      document.getElementById('igv-container').style.display = 'none';
+      const species = speciesSelect.value;
+      const tissue = tissueSelect.value;
+      const searchTerm = geneList.length > 0 ? geneList.join(',') : document.getElementById('searchInput').value.trim();
+      const params = `species=${encodeURIComponent(species)}&tissue=${encodeURIComponent(tissue)}&search_term=${encodeURIComponent(searchTerm)}&download=true`;
+      fetch('search.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params
+      })
+        .then(response => response.blob())
+        .then(blob => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'result.csv';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        })
+        .catch(error => {
+          console.error("Download error:", error);
+          alert("Download failed, please try again.");
+        });
+    }
+
+    // 原有上传功能（保持不变）
+    function submitUpload() {
+      const formData = new FormData(document.getElementById('uploadForm'));
+      const statusDiv = document.getElementById('uploadStatus');
+      statusDiv.innerHTML = '<span style="color:blue">Processing...</span>';
+      fetch("upload.php", {
+        method: "POST",
+        body: formData
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (data.error) {
+            statusDiv.innerHTML = `<span style="color:red">Error: ${data.error}</span>`;
+            return;
+          }
+          statusDiv.innerHTML = '<span style="color:green">Processing completed! Downloading...</span>';
+          // 自动触发下载
+          window.location.href = data.downloadUrl;
+        })
+        .catch(error => {
+          statusDiv.innerHTML = `<span style="color:red">Request failed: ${error.message}</span>`;
+        });
+    }
+
+    function resetPage() {
+      location.reload();
+    }
+
+    function showHelp() {
+      alert("If you have any question，please contact：ywzhang12345@163.com");
+    }
+
+    body.addEventListener("click", function(event) {
+      const dropdowns = document.querySelectorAll(".dropdown");
+      dropdowns.forEach(function(dropdown) {
+        if (!dropdown.contains(event.target)) {
+          dropdown.classList.remove("open");
+        }
+      });
+    });
+  </script>
+</body>
+</html>
