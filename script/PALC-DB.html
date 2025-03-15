@@ -121,6 +121,17 @@
       overflow-x: auto;
       margin-bottom: 60px;
     }
+    /* 图表容器宽度调整为90%，采用 Flex 布局左右对齐 */
+    #plot-container {
+      display: flex;
+      justify-content: space-between;
+      width: 90%;
+      margin: 20px auto;
+    }
+    #plot1, #plot2 {
+      flex: 1;
+      margin: 0 10px;
+    }
     footer {
       background-color: #333;
       color: white;
@@ -156,8 +167,9 @@
       background-color: #0056b3;
     }
     #coverImage {
+      display: block;
+      margin: 20px auto; /* 上下 20px，左右自动居中 */
       max-width: 100%;
-      margin-top: 20px;
     }
     table {
       width: 100%;
@@ -221,6 +233,8 @@
   <!-- 引入IGV.js -->
   <script src="https://cdn.jsdelivr.net/npm/igv@3.2.3/dist/igv.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/igv@3.2.3/dist/igv.css">
+  <!-- 引入Plotly.js，用于绘图 -->
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
 <body>
   <header>
@@ -232,7 +246,6 @@
       <img src="./PALC-logo.png" alt="Right Image" class="right-image">
     </a>
   </header>
-
   <nav>
     <a href="#" id="homeLink" onclick="resetPage()">Home</a>
     <div class="dropdown" id="speciesDropdown">
@@ -240,7 +253,6 @@
       <div class="dropdown-content">
         <select id="speciesSelect" onchange="selectSpecies()">
           <option value="">select</option>
-          <!-- 后台提交值为 mouse/human，但显示完整名称 -->
           <option value="mouse">Mus musculus</option>
           <option value="human">Homo sapiens</option>
         </select>
@@ -265,21 +277,17 @@
     </div>
     <a href="#" id="helpLink" onclick="showHelp()">Help</a>
   </nav>
-
   <div class="upload-box" id="uploadBox">
     <h3>Upload BAM File</h3>
     <form id="uploadForm" enctype="multipart/form-data">
-        <button type="button" onclick="document.getElementById('fileInput').click()" class="custom-upload-btn">
-            Choose File
-        </button>
-        <input type="file" name="bamFile" id="fileInput" accept=".bam" required style="display: none;" onchange="updateFileName(this)" />
-        <span id="fileName" class="file-info">No file chosen</span>
-        <input type="hidden" name="tool" value="polyA_extraction" />
-        <button type="button" onclick="submitUpload()">Submit</button>
+      <button type="button" onclick="document.getElementById('fileInput').click()" class="custom-upload-btn">Choose File</button>
+      <input type="file" name="bamFile" id="fileInput" accept=".bam" required style="display: none;" onchange="updateFileName(this)" />
+      <span id="fileName" class="file-info">No file chosen</span>
+      <input type="hidden" name="tool" value="polyA_extraction" />
+      <button type="button" onclick="submitUpload()">Submit</button>
     </form>
     <div id="uploadStatus"></div>
   </div>
-
   <div class="search-box" id="searchBox">
     <input type="text" id="searchInput" placeholder="Ensembl ID / Symbol（example：ENSMUSG00000000001 / Gnai3）">
     <button class="gene-upload-btn" onclick="document.getElementById('geneFile').click()">Upload Gene File</button>
@@ -287,18 +295,19 @@
     <button onclick="performSearch()">submit</button>
     <div id="fileInfo" class="file-info"></div>
   </div>
-
   <div class="result" id="result">
-    <img src="./PALC-logo2.png" alt="Cover Image" id="coverImage">
+    <!-- 上传后将用返回的 PNG 图片 URL 替换此处的默认图片 -->
+    <img src="./coverage2.png" alt="Coverage / PAL Distribution" id="coverImage">
   </div>
-  <!-- IGV容器 -->
   <div id="igv-container"></div>
+  <div id="plot-container">
+    <div id="plot1"></div>
+    <div id="plot2"></div>
+  </div>
   <footer>
     <p>&copy; 2025 Poly(A) Length & Composition Database</p>
   </footer>
-
   <script>
-    // 组织选项：每个选项包含后台值（value）和显示名称（display）
     const tissueOptions = {
       mouse: [
         { value: "GV", display: "GV oocyte" },
@@ -351,16 +360,12 @@
     const coverImage = document.getElementById('coverImage');
     const body = document.body;
     let geneList = [];
-
-    // IGV相关变量
     let igvBrowser = null;
     const genomeMap = { mouse: "mm10", human: "hg38" };
 
-    // IGV初始化函数：只创建或更新一个IGV窗口，并使用定位区域
-    async function initializeIGV(species, tissue, locus) {
+    function initializeIGV(species, tissue, locus) {
       const igvContainer = document.getElementById('igv-container');
       igvContainer.style.display = 'block';
-      // 生成BAM文件路径，假设路径为 /IGV_bam/{species}_{tissue}.bam
       const bamFilePath = `/IGV_bam/${species}_${tissue}.bam`;
       const indexFilePath = `${bamFilePath}.bai`;
       const options = {
@@ -372,20 +377,27 @@
           url: bamFilePath,
           indexURL: indexFilePath,
           name: `${species} ${tissue} BAM`,
+          showCoverage: false,
+          showMismatches: false,
+          showSoftClips: true,
+          showInsertions: false,
+          height: 200,
           visibilityWindow: 1000000
         }]
       };
       if (igvBrowser) {
-        await igvBrowser.removeAllTracks();
-        await igvBrowser.loadTrack(options.tracks[0]);
-        igvBrowser.search(locus);
+        igvBrowser.removeAllTracks().then(() => {
+          igvBrowser.loadTrack(options.tracks[0]).then(() => {
+            igvBrowser.search(locus);
+          });
+        });
       } else {
-        try {
-          igvBrowser = await igv.createBrowser(igvContainer, options);
-        } catch (err) {
+        igv.createBrowser(igvContainer, options).then(browser => {
+          igvBrowser = browser;
+        }).catch(err => {
           console.error("IGV Initialization failed:", err);
           alert("BAM file loading failed");
-        }
+        });
       }
     }
 
@@ -441,13 +453,9 @@
 
     function updateFileName(input) {
       const fileNameSpan = document.getElementById('fileName');
-      if (input.files.length > 0) {
-        fileNameSpan.textContent = input.files[0].name;
-      } else {
-        fileNameSpan.textContent = 'No file chosen';
-      }
+      fileNameSpan.textContent = input.files.length > 0 ? input.files[0].name : 'No file chosen';
     }
-    // 处理上传的 gene list 文件：将所有 gene ID 存入 geneList
+
     function handleGeneFile(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -456,7 +464,7 @@
         const content = e.target.result;
         geneList = content.split(/[\n,]+/).filter(g => g.trim());
         if (geneList.length > 1500) {
-          alert('The number of genes  cannot exceed 1500！');
+          alert('The number of genes cannot exceed 1500！');
           geneList = [];
           document.getElementById('fileInfo').textContent = '';
           return;
@@ -466,7 +474,6 @@
       reader.readAsText(file);
     }
 
-    // 搜索功能：调用 search.php，显示前6条结果，并使用检索结果中第一个有效 symbol 作为 IGV 定位区域
     function performSearch() {
       const species = speciesSelect.value;
       const tissue = tissueSelect.value;
@@ -482,71 +489,282 @@
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: params
         })
-          .then(response => response.json())
-          .then(data => {
-            if (data.error) {
-              alert(data.error);
-              return;
-            }
-            const displayData = data.slice(0, 11); // 显示前6条
-            let html = `<h2>results（presentation the first 6，total: ${data.length}）</h2>
-                        <p>物种：<strong>${species === "mouse" ? "Mus musculus" : "Homo sapiens"}</strong></p>
-                        <p>组织：<strong>${tissueSelect.options[tissueSelect.selectedIndex].text}</strong></p>
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>Ensembl ID</th>
-                              <th>Symbol</th>
-                              <th>Gene Type</th>
-                              <th>RNAseq FPKM</th>
-                              <th>Riboseq FPKM</th>
-                              <th>TE</th>
-                              <th>PAL</th>
-                              <th>Uratio</th>
-                              <th>Cratio</th>
-                              <th>Gratio</th>
-                            </tr>
-                          </thead>
-                          <tbody>`;
-            displayData.forEach(item => {
-              html += `<tr>
-                          <td>${item.ensembl_ID}</td>
-                          <td>${item.symbol}</td>
-                          <td>${item.gene_type}</td>
-                          <td>${item.RNAseq_FPKM}</td>
-                          <td>${item.Riboseq_FPKM}</td>
-                          <td>${item.TE}</td>
-                          <td>${item.PAL}</td>
-                          <td>${item.Uratio}</td>
-                          <td>${item.Cratio}</td>
-                          <td>${item.Gratio}</td>
-                        </tr>`;
-            });
-            html += `</tbody></table>
-                     <button onclick="downloadResults()">download output（total: ${data.length}）</button>`;
-            resultDiv.innerHTML = html;
-            coverImage.style.display = 'none';
-
-            // 始终使用检索结果中第一个有效的 symbol 作为 IGV 定位区域，
-            // 如果返回结果中第一个 symbol 存在且不以 "ENS" 开头，则使用，否则使用默认 "BRCA1"
-            let locus;
-            if (data.length > 0 && data[0].symbol && !data[0].symbol.startsWith("ENS")) {
-              locus = data[0].symbol;
-            } else {
-              locus = "BRCA1";
-            }
-            initializeIGV(species, tissue, locus);
-          })
-          .catch(error => {
-            console.error("Error:", error);
-            alert("Request failed, please try again later");
+        .then(response => response.json())
+        .then(data => {
+          if (data.error) {
+            alert(data.error);
+            return;
+          }
+          const displayData = data.slice(0, 11);
+          let html = `<h2>results（show the first 10 results，total results: ${data.length}）</h2>
+                      <p>species：<strong>${species === "mouse" ? "Mus musculus" : "Homo sapiens"}</strong></p>
+                      <p>tissues：<strong>${tissueSelect.options[tissueSelect.selectedIndex].text}</strong></p>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Ensembl ID</th>
+                            <th>Symbol</th>
+                            <th>Gene Type</th>
+                            <th>RNAseq FPKM</th>
+                            <th>Riboseq FPKM</th>
+                            <th>TE</th>
+                            <th>PAL</th>
+                            <th>Uratio</th>
+                            <th>Cratio</th>
+                            <th>Gratio</th>
+                          </tr>
+                        </thead>
+                        <tbody>`;
+          displayData.forEach(item => {
+            html += `<tr>
+                        <td>${item.ensembl_ID}</td>
+                        <td>${item.symbol}</td>
+                        <td>${item.gene_type}</td>
+                        <td>${item.RNAseq_FPKM}</td>
+                        <td>${item.Riboseq_FPKM}</td>
+                        <td>${item.TE}</td>
+                        <td>${item.PAL}</td>
+                        <td>${item.Uratio}</td>
+                        <td>${item.Cratio}</td>
+                        <td>${item.Gratio}</td>
+                      </tr>`;
           });
+          html += `</tbody></table>
+                   <button onclick="downloadResults()">download output（total: ${data.length}）</button>`;
+          resultDiv.innerHTML = html;
+          coverImage.style.display = 'none';
+
+          let locus;
+          if (data.length > 0 && data[0].symbol && !data[0].symbol.startsWith("ENS")) {
+            locus = data[0].symbol;
+          } else {
+            locus = "BRCA1";
+          }
+          initializeIGV(species, tissue, locus);
+
+          // -------------------------------
+          // 在IGV下方绘制图表（分成左右两部分）
+          // -------------------------------
+            if (geneList.length === 0) {
+              // 单个基因，使用柱状图绘制
+              const geneData = data[0];
+              // 图1：RNA-seq、Ribo-seq、PAL；RNA-seq与Ribo-seq使用左轴（FPKM），PAL使用右轴（poly(A) length）
+              let traces1 = [];
+              if (geneData.RNAseq_FPKM != null) {
+                traces1.push({
+                  x: ["RNA-seq"],
+                  y: [geneData.RNAseq_FPKM],
+                  name: "RNA-seq",
+                  type: 'bar'
+                });
+              }
+              if (geneData.Riboseq_FPKM != null) {
+                traces1.push({
+                  x: ["Ribo-seq"],
+                  y: [geneData.Riboseq_FPKM],
+                  name: "Ribo-seq",
+                  type: 'bar'
+                });
+              }
+              if (geneData.PAL != null) {
+                traces1.push({
+                  x: ["PAL"],
+                  y: [geneData.PAL],
+                  name: "PAL",
+                  type: 'bar',
+                  yaxis: 'y2'
+                });
+              }
+              let layout1 = {
+                title: `${geneData.symbol} (transcription & translation & poly(A) length)`,
+                yaxis: { title: 'FPKM' },
+                yaxis2: {
+                  title: 'poly(A) length',
+                  overlaying: 'y',
+                  side: 'right'
+                },
+                barmode: 'group',
+                font: {family: 'Arial'},
+                legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.1 }
+              };
+
+              // 图2：U, C, G ratio柱状图，设置不同颜色
+              let traces2 = [];
+              if (geneData.Uratio != null) {
+                traces2.push({
+                  x: ["U ratio"],
+                  y: [geneData.Uratio],
+                  name: "U ratio",
+                  type: 'bar',
+                  marker: { color: 'rgba(31, 119, 180, 1)' }
+                });
+              }
+              if (geneData.Cratio != null) {
+                traces2.push({
+                  x: ["C ratio"],
+                  y: [geneData.Cratio],
+                  name: "C ratio",
+                  type: 'bar',
+                  marker: { color: 'rgba(255, 127, 14, 1)' }
+                });
+              }
+              if (geneData.Gratio != null) {
+                traces2.push({
+                  x: ["G ratio"],
+                  y: [geneData.Gratio],
+                  name: "G ratio",
+                  type: 'bar',
+                  marker: { color: 'rgba(44, 160, 44, 1)' }
+                });
+              }
+              let layout2 = {
+                title: `${geneData.symbol} (nonA residues Ratios)`,
+                yaxis: { title: 'Ratio' },
+                barmode: 'group',
+                showlegend: true,
+                font: {family: 'Arial'},
+                legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.1 }
+              };
+
+              Plotly.newPlot('plot1', traces1, layout1);
+              Plotly.newPlot('plot2', traces2, layout2);
+
+              // -------------------------------
+              // 新增：加载 PAL 分布图（单个基因检索时显示）
+              // 使用返回结果的 symbol 和选择的物种构造图片文件名，格式为 species_symbol_PAL.png
+              // 并将该图片插入在图表容器之后（而不是检索结果后面）
+              let palImageDiv = document.createElement("div");
+              palImageDiv.id = "palImage";
+              palImageDiv.style.textAlign = "center";
+              palImageDiv.style.marginTop = "20px";
+              palImageDiv.innerHTML = '<h3>' + geneData.symbol + ' PAL Distribution</h3>' +
+                '<img src="/all_gene_plots/' + species + '_' + geneData.symbol + '_PAL.png" alt="PAL Distribution for ' + geneData.symbol + '" style="max-width:90%;">';
+              document.getElementById('plot-container').insertAdjacentElement('afterend', palImageDiv);
+            } else {
+              // 基因列表，使用小提琴图绘制
+              const measurements1 = {
+                "RNA-seq": [],
+                "Ribo-seq": [],
+                "PAL": []
+              };
+              data.forEach(gene => {
+                if (gene.RNAseq_FPKM != null) measurements1["RNA-seq"].push(gene.RNAseq_FPKM);
+                if (gene.Riboseq_FPKM != null) measurements1["Ribo-seq"].push(gene.Riboseq_FPKM);
+                if (gene.PAL != null) measurements1["PAL"].push(gene.PAL);
+              });
+              const traces1 = [];
+              if (measurements1["RNA-seq"].length > 0) {
+                traces1.push({
+                  type: 'violin',
+                  x: Array(measurements1["RNA-seq"].length).fill("RNA-seq"),
+                  y: measurements1["RNA-seq"],
+                  name: "RNA-seq",
+                  box: { visible: true },
+                  meanline: { visible: true }
+                });
+              }
+              if (measurements1["Ribo-seq"].length > 0) {
+                traces1.push({
+                  type: 'violin',
+                  x: Array(measurements1["Ribo-seq"].length).fill("Ribo-seq"),
+                  y: measurements1["Ribo-seq"],
+                  name: "Ribo-seq",
+                  box: { visible: true },
+                  meanline: { visible: true }
+                });
+              }
+              if (measurements1["PAL"].length > 0) {
+                traces1.push({
+                  type: 'violin',
+                  x: Array(measurements1["PAL"].length).fill("PAL"),
+                  y: measurements1["PAL"],
+                  name: "PAL",
+                  box: { visible: true },
+                  meanline: { visible: true },
+                  yaxis: 'y2'
+                });
+              }
+              let layout1 = {
+                title: `transcription & translation & poly(A) length`,
+                yaxis: { title: 'FPKM' },
+                yaxis2: {
+                  title: 'poly(A) length',
+                  overlaying: 'y',
+                  side: 'right'
+                },
+                font: {family: 'Arial'},
+                legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.1 }
+              };
+
+              const measurements2 = {
+                "U ratio": [],
+                "C ratio": [],
+                "G ratio": []
+              };
+              data.forEach(gene => {
+                if (gene.Uratio != null) measurements2["U ratio"].push(gene.Uratio);
+                if (gene.Cratio != null) measurements2["C ratio"].push(gene.Cratio);
+                if (gene.Gratio != null) measurements2["G ratio"].push(gene.Gratio);
+              });
+              const ratioColors = {
+                "U ratio": "rgba(31, 119, 180, 0.8)",
+                "C ratio": "rgba(255, 127, 14, 0.8)",
+                "G ratio": "rgba(44, 160, 44, 0.8)"
+              };
+              const traces2 = [];
+              if (measurements2["U ratio"].length > 0) {
+                traces2.push({
+                  type: 'violin',
+                  x: Array(measurements2["U ratio"].length).fill("U ratio"),
+                  y: measurements2["U ratio"],
+                  name: "U ratio",
+                  box: { visible: true },
+                  meanline: { visible: true },
+                  marker: { color: ratioColors["U ratio"] }
+                });
+              }
+              if (measurements2["C ratio"].length > 0) {
+                traces2.push({
+                  type: 'violin',
+                  x: Array(measurements2["C ratio"].length).fill("C ratio"),
+                  y: measurements2["C ratio"],
+                  name: "C ratio",
+                  box: { visible: true },
+                  meanline: { visible: true },
+                  marker: { color: ratioColors["C ratio"] }
+                });
+              }
+              if (measurements2["G ratio"].length > 0) {
+                traces2.push({
+                  type: 'violin',
+                  x: Array(measurements2["G ratio"].length).fill("G ratio"),
+                  y: measurements2["G ratio"],
+                  name: "G ratio",
+                  box: { visible: true },
+                  meanline: { visible: true },
+                  marker: { color: ratioColors["G ratio"] }
+                });
+              }
+              let layout2 = {
+                title: `nonA residues Ratios`,
+                yaxis: { title: 'Ratio' },
+                font: {family: 'Arial'},
+                legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.1 }
+              };
+
+              Plotly.newPlot('plot1', traces1, layout1);
+              Plotly.newPlot('plot2', traces2, layout2);
+            }
+        })
+        .catch(error => {
+          console.error("Error:", error);
+          alert("Request failed, please try again later");
+        });
       } else {
         alert("Please select a species, organization, and enter the gene name!");
       }
     }
 
-    // 下载功能（保持不变）
     function downloadResults() {
       document.getElementById('igv-container').style.display = 'none';
       const species = speciesSelect.value;
@@ -558,44 +776,49 @@
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: params
       })
-        .then(response => response.blob())
-        .then(blob => {
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = 'result.csv';
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-        })
-        .catch(error => {
-          console.error("Download error:", error);
-          alert("Download failed, please try again.");
-        });
+      .then(response => response.blob())
+      .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'result.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      })
+      .catch(error => {
+        console.error("Download error:", error);
+        alert("Download failed, please try again.");
+      });
     }
 
-    // 原有上传功能（保持不变）
     function submitUpload() {
       const formData = new FormData(document.getElementById('uploadForm'));
       const statusDiv = document.getElementById('uploadStatus');
-      statusDiv.innerHTML = '<span style="color:blue">Processing...</span>';
+      statusDiv.innerHTML = '<span style="color:blue">Processing......</span>';
       fetch("upload.php", {
         method: "POST",
         body: formData
       })
-        .then(response => response.json())
-        .then(data => {
-          if (data.error) {
-            statusDiv.innerHTML = `<span style="color:red">Error: ${data.error}</span>`;
-            return;
-          }
-          statusDiv.innerHTML = '<span style="color:green">Processing completed! Downloading...</span>';
-          // 自动触发下载
-          window.location.href = data.downloadUrl;
-        })
-        .catch(error => {
-          statusDiv.innerHTML = `<span style="color:red">Request failed: ${error.message}</span>`;
-        });
+      .then(response => response.json())
+      .then(data => {
+        if (data.error) {
+          statusDiv.innerHTML = `<span style="color:red">Error: ${data.error}</span>`;
+          return;
+        }
+        // 上传后更新 coverImage 的 src 为后端返回的图片 URL（例如 /extract_polyA/xxx_PAL.png）
+        coverImage.src = data.plotUrl;
+        statusDiv.innerHTML = '<span style="color:green">Processing completed!</span>';
+        const link = document.createElement('a');
+        link.href = data.outTxtUrl;
+        link.download = "out.txt";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      })
+      .catch(error => {
+        statusDiv.innerHTML = `<span style="color:red">Request failed: ${error.message}</span>`;
+      });
     }
 
     function resetPage() {
@@ -603,7 +826,7 @@
     }
 
     function showHelp() {
-      alert("If you have any question，please contact：ywzhang12345@163.com");
+      alert("If you have any question, please contact: ywzhang12345@163.com");
     }
 
     body.addEventListener("click", function(event) {
