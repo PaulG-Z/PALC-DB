@@ -34,6 +34,15 @@
       max-height: 100%;
       object-fit: contain;
     }
+    header .mid-image {
+      position: absolute;
+      right: 150px;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
     header .right-image {
       position: absolute;
       right: 20px;
@@ -75,7 +84,7 @@
       position: absolute;
       background-color: white;
       min-width: 160px;
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
       z-index: 1;
     }
     nav .dropdown-content select {
@@ -113,15 +122,18 @@
     }
     .result {
       margin: 20px auto;
-      width: 80%;
+      width: 90%;
       background-color: white;
       padding: 20px;
       border-radius: 4px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
       overflow-x: auto;
       margin-bottom: 60px;
     }
-    /* 图表容器宽度调整为90%，采用 Flex 布局左右对齐 */
+    .result-table-container {
+      max-height: 400px;
+      overflow-y: auto;
+    }
     #plot-container {
       display: flex;
       justify-content: space-between;
@@ -141,10 +153,6 @@
       bottom: 0;
       width: 100%;
       margin-top: 30px;
-    }
-    #page-container {
-      position: relative;
-      min-height: 100vh;
     }
     .upload-box {
       display: none;
@@ -168,7 +176,7 @@
     }
     #coverImage {
       display: block;
-      margin: 20px auto; /* 上下 20px，左右自动居中 */
+      margin: 20px auto;
       max-width: 100%;
     }
     table {
@@ -217,11 +225,6 @@
     .gene-upload-btn:hover {
       background-color: #45a049;
     }
-    .file-info {
-      color: black;
-      font-size: 14px;
-      margin-top: 5px;
-    }
     #igv-container {
       width: 90%;
       height: 500px;
@@ -242,8 +245,11 @@
       <img src="./logo2.png" alt="Left Image" class="left-image">
     </a>
     <h1>Poly(A) Length & Composition Database</h1>
+    <a href="https://genetics.cas.cn/" target="_blank">
+      <img src="./IGDB_logo.png" alt="Mid Image" class="mid-image">
+    </a>
     <a href="https://github.com/PaulG-Z/PALC-DB" target="_blank">
-      <img src="./PALC-logo.png" alt="Right Image" class="right-image">
+      <img src="./northeast_logo.png" alt="Right Image" class="right-image">
     </a>
   </header>
   <nav>
@@ -296,8 +302,8 @@
     <div id="fileInfo" class="file-info"></div>
   </div>
   <div class="result" id="result">
-    <!-- 上传后将用返回的 PNG 图片 URL 替换此处的默认图片 -->
-    <img src="./coverage2.png" alt="Coverage / PAL Distribution" id="coverImage">
+    <!-- 默认显示数据库封面图片 -->
+    <img src="./coverage4.png" alt="Coverage / PAL Distribution" id="coverImage">
   </div>
   <div id="igv-container"></div>
   <div id="plot-container">
@@ -308,6 +314,221 @@
     <p>&copy; 2025 Poly(A) Length & Composition Database</p>
   </footer>
   <script>
+    // 刷新结果页面显示新结果
+    function clearResults() {
+      const resultDiv = document.getElementById('result');
+      const plotContainer = document.getElementById('plot-container');
+      const igvContainer = document.getElementById('igv-container');
+      const palImage = document.getElementById('palImage');
+
+      //清空结果页面
+      resultDiv.innerHTML = '';
+      coverImage.style.display = 'none';
+
+      // 清除图表
+      Plotly.purge('plot1');
+      Plotly.purge('plot2');
+
+      // 清除IGV和附加元素
+      if (igvBrowser) {
+        igvBrowser.removeAllTracks();
+        igvContainer.style.display = 'none';
+      }
+      if (palImage) palImage.remove();
+    }
+    // GEO 映射对象：根据物种与 tissue 构造所有 GEO 信息记录
+    const geoMapping = {
+      mouse: {
+        GV: {
+          rnaSeq: { geo: "GSE165782", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE165782" },
+          riboSeq: { geo: "GSE165782", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE165782" },
+          pal: { geo: "PRJCA006144", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        MI: {
+          rnaSeq: { geo: "GSE165782", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE165782" },
+          riboSeq: { geo: "GSE165782", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE165782" },
+          pal: { geo: "PRJCA006144", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        MII: {
+          rnaSeq: { geo: "GSE165782", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE165782" },
+          riboSeq: { geo: "GSE165782", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE165782" },
+          pal: { geo: "PRJCA006144", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        "1C": {
+          rnaSeq: { geo: "GSE165782", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE165782" },
+          riboSeq: { geo: "GSE165782", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE165782" },
+          pal: { geo: "PRJCA006144", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        "2C": {
+          rnaSeq: { geo: "GSE165782", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE165782" },
+          riboSeq: { geo: "GSE165782", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE165782" },
+          pal: { geo: "PRJCA006144", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        "4C": {
+          rnaSeq: { geo: "GSE165782", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE165782" },
+          riboSeq: { geo: "GSE165782", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE165782" },
+          pal: { geo: "PRJCA006144", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        "8C": {
+          rnaSeq: { geo: "GSE165782", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE165782" },
+          riboSeq: { geo: "GSE165782", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE165782" },
+          pal: { geo: "PRJCA006144", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        Morula: {
+          rnaSeq: { geo: "GSE169632", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE169632" },
+          riboSeq: { geo: "GSE169632", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE169632" },
+          pal: { geo: "PRJCA006144", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        Blastocyst: {
+          rnaSeq: { geo: "GSE209648", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE209648" },
+          riboSeq: { geo: "GSE209648", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE209648" },
+          pal: { geo: "PRJCA006144", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        NIH3T3: {
+          rnaSeq: { geo: "GSE158136", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE158136" },
+          riboSeq: { geo: "GSE158136", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE158136" },
+          pal: { geo: "CRA004926", url: "https://ngdc.cncb.ac.cn/gsa/browse/CRA004926" }
+        },
+        ESC: {
+          rnaSeq: { geo: "GSE165782", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE165782" },
+          riboSeq: { geo: "GSE165782", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE165782" },
+          pal: { geo: "CRA004926", url: "https://ngdc.cncb.ac.cn/gsa/browse/CRA004926" }
+        },
+        BAT: {
+          rnaSeq: { geo: "GSE131172", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE131172" },
+          riboSeq: { geo: "NA", url: "NA" },
+          pal: { geo: "PRJCA006438", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        Brain: {
+          rnaSeq: { geo: "GSE94982", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE94982" },
+          riboSeq: { geo: "GSE94982", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE94982" },
+          pal: { geo: "PRJCA006438", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        Epididymis: {
+          rnaSeq: { geo: "GSE247820", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE247820" },
+          riboSeq: { geo: "NA", url: "NA" },
+          pal: { geo: "PRJCA006438", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        Heart: {
+          rnaSeq: { geo: "GSE94982", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE94982" },
+          riboSeq: { geo: "GSE94982", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE94982" },
+          pal: { geo: "PRJCA006438", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        Intestine: {
+          rnaSeq: { geo: "GSE188361", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE188361" },
+          riboSeq: { geo: "NA", url: "NA" },
+          pal: { geo: "PRJCA006438", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        Kidney: {
+          rnaSeq: { geo: "GSE94982", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE94982" },
+          riboSeq: { geo: "GSE94982", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE94982" },
+          pal: { geo: "PRJCA006438", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        Liver: {
+          rnaSeq: { geo: "GSE94982", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE94982" },
+          riboSeq: { geo: "GSE94982", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE94982" },
+          pal: { geo: "PRJCA006438", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        Lung: {
+          rnaSeq: { geo: "GSE94982", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE94982" },
+          riboSeq: { geo: "GSE94982", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE94982" },
+          pal: { geo: "PRJCA006438", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        Muscle: {
+          rnaSeq: { geo: "GSE131172", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE131172" },
+          riboSeq: { geo: "NA", url: "NA" },
+          pal: { geo: "PRJCA006438", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        Ovary: {
+          rnaSeq: { geo: "GSE131172", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE131172" },
+          riboSeq: { geo: "NA", url: "NA" },
+          pal: { geo: "PRJCA006438", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        Oviduct: {
+          rnaSeq: { geo: "GSE147882", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE147882" },
+          riboSeq: { geo: "NA", url: "NA" },
+          pal: { geo: "PRJCA006438", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        Spleen: {
+          rnaSeq: { geo: "GSE131172", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE131172" },
+          riboSeq: { geo: "GSE112223", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE112223" },
+          pal: { geo: "PRJCA006438", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        Testis: {
+          rnaSeq: { geo: "GSE278278", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE278278" },
+          riboSeq: { geo: "GSE65786", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE65786" },
+          pal: { geo: "PRJCA006438", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        Uterus: {
+          rnaSeq: { geo: "GSE131172", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE131172" },
+          riboSeq: { geo: "NA", url: "NA" },
+          pal: { geo: "PRJCA006438", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        },
+        WAT: {
+          rnaSeq: { geo: "GSE131172", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE131172" },
+          riboSeq: { geo: "NA", url: "NA" },
+          pal: { geo: "PRJCA006438", url: "https://www.biorxiv.org/content/10.1101/2021.08.29.458068v2" }
+        }
+      },
+      human: {
+        GV: {
+          rnaSeq: { geo: "GSE197265", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE197265" },
+          riboSeq: { geo: "GSE197265", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE197265" },
+          pal: { geo: "HRA001288", url: "https://ngdc.cncb.ac.cn/gsa-human/browse/HRA001288" }
+        },
+        MI: {
+          rnaSeq: { geo: "GSE197265", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE197265" },
+          riboSeq: { geo: "GSE197265", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE197265" },
+          pal: { geo: "HRA001288", url: "https://ngdc.cncb.ac.cn/gsa-human/browse/HRA001288" }
+        },
+        MII: {
+          rnaSeq: { geo: "GSE197265", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE197265" },
+          riboSeq: { geo: "GSE197265", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE197265" },
+          pal: { geo: "HRA001288", url: "https://ngdc.cncb.ac.cn/gsa-human/browse/HRA001288" }
+        },
+        "1C": {
+          rnaSeq: { geo: "GSE197265", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE197265" },
+          riboSeq: { geo: "GSE197265", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE197265" },
+          pal: { geo: "HRA001288", url: "https://ngdc.cncb.ac.cn/gsa-human/browse/HRA001288" }
+        },
+        "2C": {
+          rnaSeq: { geo: "GSE197265", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE197265" },
+          riboSeq: { geo: "GSE197265", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE197265" },
+          pal: { geo: "HRA001288", url: "https://ngdc.cncb.ac.cn/gsa-human/browse/HRA001288" }
+        },
+        "4C": {
+          rnaSeq: { geo: "GSE197265", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE197265" },
+          riboSeq: { geo: "GSE197265", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE197265" },
+          pal: { geo: "HRA001288", url: "https://ngdc.cncb.ac.cn/gsa-human/browse/HRA001288" }
+        },
+        "8C": {
+          rnaSeq: { geo: "GSE197265", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE197265" },
+          riboSeq: { geo: "GSE197265", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE197265" },
+          pal: { geo: "HRA001288", url: "https://ngdc.cncb.ac.cn/gsa-human/browse/HRA001288" }
+        },
+        Morula: {
+          rnaSeq: { geo: "GSE197578", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE197578" },
+          riboSeq: { geo: "GSE197578", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE197578" },
+          pal: { geo: "HRA001288", url: "https://ngdc.cncb.ac.cn/gsa-human/browse/HRA001288" }
+        },
+        Blastocyst: {
+          rnaSeq: { geo: "GSE176016", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE176016" },
+          riboSeq: { geo: "NA", url: "NA" },
+          pal: { geo: "HRA001288", url: "https://ngdc.cncb.ac.cn/gsa-human/browse/HRA001288" }
+        },
+        Hela: {
+          rnaSeq: { geo: "GSE282509", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE282509" },
+          riboSeq: { geo: "GSE282509", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE282509" },
+          pal: { geo: "GSE126465", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE126465" }
+        },
+        iPSC: {
+          rnaSeq: { geo: "GSE233555", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE233555" },
+          riboSeq: { geo: "GSE233555", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE233555" },
+          pal: { geo: "GSE126465", url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE126465" }
+        }
+      }
+    };
+
     const tissueOptions = {
       mouse: [
         { value: "GV", display: "GV oocyte" },
@@ -392,7 +613,7 @@
           });
         });
       } else {
-        igv.createBrowser(igvContainer, options).then(browser => {
+        igv.createBrowser(document.getElementById('igv-container'), options).then(browser => {
           igvBrowser = browser;
         }).catch(err => {
           console.error("IGV Initialization failed:", err);
@@ -475,6 +696,7 @@
     }
 
     function performSearch() {
+      clearResults();
       const species = speciesSelect.value;
       const tissue = tissueSelect.value;
       let searchTerm = geneList.length > 0 ? geneList.join(',') : document.getElementById('searchInput').value.trim();
@@ -495,10 +717,22 @@
             alert(data.error);
             return;
           }
-          const displayData = data.slice(0, 11);
-          let html = `<h2>results（show the first 10 results，total results: ${data.length}）</h2>
+          // 获取 GEO 信息
+          const geoInfo = (geoMapping[species] && geoMapping[species][tissue])
+                          ? geoMapping[species][tissue]
+                          : { rnaSeq: { geo: "GSE_default", url: "#" },
+                              riboSeq: { geo: "GSE_default", url: "#" },
+                              pal: { geo: "GSE_default", url: "#" } };
+          const displayData = data;
+          let html = `<h2>results（total results: ${data.length}）</h2>
                       <p>species：<strong>${species === "mouse" ? "Mus musculus" : "Homo sapiens"}</strong></p>
                       <p>tissues：<strong>${tissueSelect.options[tissueSelect.selectedIndex].text}</strong></p>
+                      <p>Source Data:
+                        RNA-seq: <a href="${geoInfo.rnaSeq.url}" target="_blank">${geoInfo.rnaSeq.geo}</a> |
+                        Ribo-seq: <a href="${geoInfo.riboSeq.url}" target="_blank">${geoInfo.riboSeq.geo}</a> |
+                        PAL: <a href="${geoInfo.pal.url}" target="_blank">${geoInfo.pal.geo}</a>
+                      </p>
+                      <div class="result-table-container">
                       <table>
                         <thead>
                           <tr>
@@ -518,7 +752,7 @@
           displayData.forEach(item => {
             html += `<tr>
                         <td>${item.ensembl_ID}</td>
-                        <td>${item.symbol}</td>
+                        <td onclick="jumpToSymbol('${item.symbol}')" style="cursor:pointer; color:blue;">${item.symbol}</td>
                         <td>${item.gene_type}</td>
                         <td>${item.RNAseq_FPKM}</td>
                         <td>${item.Riboseq_FPKM}</td>
@@ -530,6 +764,7 @@
                       </tr>`;
           });
           html += `</tbody></table>
+                   </div>
                    <button onclick="downloadResults()">download output（total: ${data.length}）</button>`;
           resultDiv.innerHTML = html;
           coverImage.style.display = 'none';
@@ -542,219 +777,196 @@
           }
           initializeIGV(species, tissue, locus);
 
-          // -------------------------------
-          // 在IGV下方绘制图表（分成左右两部分）
-          // -------------------------------
-            if (geneList.length === 0) {
-              // 单个基因，使用柱状图绘制
-              const geneData = data[0];
-              // 图1：RNA-seq、Ribo-seq、PAL；RNA-seq与Ribo-seq使用左轴（FPKM），PAL使用右轴（poly(A) length）
-              let traces1 = [];
-              if (geneData.RNAseq_FPKM != null) {
-                traces1.push({
-                  x: ["RNA-seq"],
-                  y: [geneData.RNAseq_FPKM],
-                  name: "RNA-seq",
-                  type: 'bar'
-                });
-              }
-              if (geneData.Riboseq_FPKM != null) {
-                traces1.push({
-                  x: ["Ribo-seq"],
-                  y: [geneData.Riboseq_FPKM],
-                  name: "Ribo-seq",
-                  type: 'bar'
-                });
-              }
-              if (geneData.PAL != null) {
-                traces1.push({
-                  x: ["PAL"],
-                  y: [geneData.PAL],
-                  name: "PAL",
-                  type: 'bar',
-                  yaxis: 'y2'
-                });
-              }
-              let layout1 = {
-                title: `${geneData.symbol} (transcription & translation & poly(A) length)`,
-                yaxis: { title: 'FPKM' },
-                yaxis2: {
-                  title: 'poly(A) length',
-                  overlaying: 'y',
-                  side: 'right'
-                },
-                barmode: 'group',
-                font: {family: 'Arial'},
-                legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.1 }
-              };
-
-              // 图2：U, C, G ratio柱状图，设置不同颜色
-              let traces2 = [];
-              if (geneData.Uratio != null) {
-                traces2.push({
-                  x: ["U ratio"],
-                  y: [geneData.Uratio],
-                  name: "U ratio",
-                  type: 'bar',
-                  marker: { color: 'rgba(31, 119, 180, 1)' }
-                });
-              }
-              if (geneData.Cratio != null) {
-                traces2.push({
-                  x: ["C ratio"],
-                  y: [geneData.Cratio],
-                  name: "C ratio",
-                  type: 'bar',
-                  marker: { color: 'rgba(255, 127, 14, 1)' }
-                });
-              }
-              if (geneData.Gratio != null) {
-                traces2.push({
-                  x: ["G ratio"],
-                  y: [geneData.Gratio],
-                  name: "G ratio",
-                  type: 'bar',
-                  marker: { color: 'rgba(44, 160, 44, 1)' }
-                });
-              }
-              let layout2 = {
-                title: `${geneData.symbol} (nonA residues Ratios)`,
-                yaxis: { title: 'Ratio' },
-                barmode: 'group',
-                showlegend: true,
-                font: {family: 'Arial'},
-                legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.1 }
-              };
-
-              Plotly.newPlot('plot1', traces1, layout1);
-              Plotly.newPlot('plot2', traces2, layout2);
-
-              // -------------------------------
-              // 新增：加载 PAL 分布图（单个基因检索时显示）
-              // 使用返回结果的 symbol 和选择的物种构造图片文件名，格式为 species_symbol_PAL.png
-              // 并将该图片插入在图表容器之后（而不是检索结果后面）
-              let palImageDiv = document.createElement("div");
-              palImageDiv.id = "palImage";
-              palImageDiv.style.textAlign = "center";
-              palImageDiv.style.marginTop = "20px";
-              palImageDiv.innerHTML = '<h3>' + geneData.symbol + ' PAL Distribution</h3>' +
-                '<img src="/all_gene_plots/' + species + '_' + geneData.symbol + '_PAL.png" alt="PAL Distribution for ' + geneData.symbol + '" style="max-width:90%;">';
-              document.getElementById('plot-container').insertAdjacentElement('afterend', palImageDiv);
-            } else {
-              // 基因列表，使用小提琴图绘制
-              const measurements1 = {
-                "RNA-seq": [],
-                "Ribo-seq": [],
-                "PAL": []
-              };
-              data.forEach(gene => {
-                if (gene.RNAseq_FPKM != null) measurements1["RNA-seq"].push(gene.RNAseq_FPKM);
-                if (gene.Riboseq_FPKM != null) measurements1["Ribo-seq"].push(gene.Riboseq_FPKM);
-                if (gene.PAL != null) measurements1["PAL"].push(gene.PAL);
+          // 根据检索结果（单个基因或多个基因）绘制图表
+          if (geneList.length === 0) {
+            const geneData = data[0];
+            let traces1 = [];
+            if (geneData.RNAseq_FPKM != null) {
+              traces1.push({
+                x: ["RNA-seq"],
+                y: [geneData.RNAseq_FPKM],
+                name: "RNA-seq",
+                type: 'bar'
               });
-              const traces1 = [];
-              if (measurements1["RNA-seq"].length > 0) {
-                traces1.push({
-                  type: 'violin',
-                  x: Array(measurements1["RNA-seq"].length).fill("RNA-seq"),
-                  y: measurements1["RNA-seq"],
-                  name: "RNA-seq",
-                  box: { visible: true },
-                  meanline: { visible: true }
-                });
-              }
-              if (measurements1["Ribo-seq"].length > 0) {
-                traces1.push({
-                  type: 'violin',
-                  x: Array(measurements1["Ribo-seq"].length).fill("Ribo-seq"),
-                  y: measurements1["Ribo-seq"],
-                  name: "Ribo-seq",
-                  box: { visible: true },
-                  meanline: { visible: true }
-                });
-              }
-              if (measurements1["PAL"].length > 0) {
-                traces1.push({
-                  type: 'violin',
-                  x: Array(measurements1["PAL"].length).fill("PAL"),
-                  y: measurements1["PAL"],
-                  name: "PAL",
-                  box: { visible: true },
-                  meanline: { visible: true },
-                  yaxis: 'y2'
-                });
-              }
-              let layout1 = {
-                title: `transcription & translation & poly(A) length`,
-                yaxis: { title: 'FPKM' },
-                yaxis2: {
-                  title: 'poly(A) length',
-                  overlaying: 'y',
-                  side: 'right'
-                },
-                font: {family: 'Arial'},
-                legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.1 }
-              };
-
-              const measurements2 = {
-                "U ratio": [],
-                "C ratio": [],
-                "G ratio": []
-              };
-              data.forEach(gene => {
-                if (gene.Uratio != null) measurements2["U ratio"].push(gene.Uratio);
-                if (gene.Cratio != null) measurements2["C ratio"].push(gene.Cratio);
-                if (gene.Gratio != null) measurements2["G ratio"].push(gene.Gratio);
-              });
-              const ratioColors = {
-                "U ratio": "rgba(31, 119, 180, 0.8)",
-                "C ratio": "rgba(255, 127, 14, 0.8)",
-                "G ratio": "rgba(44, 160, 44, 0.8)"
-              };
-              const traces2 = [];
-              if (measurements2["U ratio"].length > 0) {
-                traces2.push({
-                  type: 'violin',
-                  x: Array(measurements2["U ratio"].length).fill("U ratio"),
-                  y: measurements2["U ratio"],
-                  name: "U ratio",
-                  box: { visible: true },
-                  meanline: { visible: true },
-                  marker: { color: ratioColors["U ratio"] }
-                });
-              }
-              if (measurements2["C ratio"].length > 0) {
-                traces2.push({
-                  type: 'violin',
-                  x: Array(measurements2["C ratio"].length).fill("C ratio"),
-                  y: measurements2["C ratio"],
-                  name: "C ratio",
-                  box: { visible: true },
-                  meanline: { visible: true },
-                  marker: { color: ratioColors["C ratio"] }
-                });
-              }
-              if (measurements2["G ratio"].length > 0) {
-                traces2.push({
-                  type: 'violin',
-                  x: Array(measurements2["G ratio"].length).fill("G ratio"),
-                  y: measurements2["G ratio"],
-                  name: "G ratio",
-                  box: { visible: true },
-                  meanline: { visible: true },
-                  marker: { color: ratioColors["G ratio"] }
-                });
-              }
-              let layout2 = {
-                title: `nonA residues Ratios`,
-                yaxis: { title: 'Ratio' },
-                font: {family: 'Arial'},
-                legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.1 }
-              };
-
-              Plotly.newPlot('plot1', traces1, layout1);
-              Plotly.newPlot('plot2', traces2, layout2);
             }
+            if (geneData.Riboseq_FPKM != null) {
+              traces1.push({
+                x: ["Ribo-seq"],
+                y: [geneData.Riboseq_FPKM],
+                name: "Ribo-seq",
+                type: 'bar'
+              });
+            }
+            if (geneData.PAL != null) {
+              traces1.push({
+                x: ["PAL"],
+                y: [geneData.PAL],
+                name: "PAL",
+                type: 'bar',
+                yaxis: 'y2'
+              });
+            }
+            let layout1 = {
+              title: `${geneData.symbol} (transcription & translation & poly(A) length)`,
+              yaxis: { title: 'FPKM' },
+              yaxis2: {
+                title: 'poly(A) length',
+                overlaying: 'y',
+                side: 'right'
+              },
+              barmode: 'group',
+              font: {family: 'Arial'},
+              legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.1 }
+            };
+            let traces2 = [];
+            if (geneData.Uratio != null) {
+              traces2.push({
+                x: ["U ratio"],
+                y: [geneData.Uratio],
+                name: "U ratio",
+                type: 'bar',
+                marker: { color: 'rgba(31, 119, 180, 1)' }
+              });
+            }
+            if (geneData.Cratio != null) {
+              traces2.push({
+                x: ["C ratio"],
+                y: [geneData.Cratio],
+                name: "C ratio",
+                type: 'bar',
+                marker: { color: 'rgba(255, 127, 14, 1)' }
+              });
+            }
+            if (geneData.Gratio != null) {
+              traces2.push({
+                x: ["G ratio"],
+                y: [geneData.Gratio],
+                name: "G ratio",
+                type: 'bar',
+                marker: { color: 'rgba(44, 160, 44, 1)' }
+              });
+            }
+            let layout2 = {
+              title: `${geneData.symbol} (nonA residues Ratios)`,
+              yaxis: { title: 'Ratio' },
+              barmode: 'group',
+              showlegend: true,
+              font: {family: 'Arial'},
+              legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.1 }
+            };
+            Plotly.newPlot('plot1', traces1, layout1);
+            Plotly.newPlot('plot2', traces2, layout2);
+            let palImageDiv = document.createElement("div");
+            palImageDiv.id = "palImage";
+            palImageDiv.style.textAlign = "center";
+            palImageDiv.style.marginTop = "20px";
+            palImageDiv.innerHTML = '<h3>' + geneData.symbol + ' PAL Distribution</h3>' +
+              '<img src="/all_gene_plots/' + species + '_' + geneData.symbol + '_PAL.png" alt="PAL Distribution for ' + geneData.symbol + '" style="max-width:90%;">';
+            document.getElementById('plot-container').insertAdjacentElement('afterend', palImageDiv);
+          } else {
+            const measurements1 = { "RNA-seq": [], "Ribo-seq": [], "PAL": [] };
+            data.forEach(gene => {
+              if (gene.RNAseq_FPKM != null) measurements1["RNA-seq"].push(gene.RNAseq_FPKM);
+              if (gene.Riboseq_FPKM != null) measurements1["Ribo-seq"].push(gene.Riboseq_FPKM);
+              if (gene.PAL != null) measurements1["PAL"].push(gene.PAL);
+            });
+            const traces1 = [];
+            if (measurements1["RNA-seq"].length > 0) {
+              traces1.push({
+                type: 'violin',
+                x: Array(measurements1["RNA-seq"].length).fill("RNA-seq"),
+                y: measurements1["RNA-seq"],
+                name: "RNA-seq",
+                box: { visible: true },
+                meanline: { visible: true }
+              });
+            }
+            if (measurements1["Ribo-seq"].length > 0) {
+              traces1.push({
+                type: 'violin',
+                x: Array(measurements1["Ribo-seq"].length).fill("Ribo-seq"),
+                y: measurements1["Ribo-seq"],
+                name: "Ribo-seq",
+                box: { visible: true },
+                meanline: { visible: true }
+              });
+            }
+            if (measurements1["PAL"].length > 0) {
+              traces1.push({
+                type: 'violin',
+                x: Array(measurements1["PAL"].length).fill("PAL"),
+                y: measurements1["PAL"],
+                name: "PAL",
+                box: { visible: true },
+                meanline: { visible: true },
+                yaxis: 'y2'
+              });
+            }
+            let layout1 = {
+              title: `transcription & translation & poly(A) length`,
+              yaxis: { title: 'FPKM' },
+              yaxis2: {
+                title: 'poly(A) length',
+                overlaying: 'y',
+                side: 'right'
+              },
+              font: {family: 'Arial'},
+              legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.1 }
+            };
+            const measurements2 = { "U ratio": [], "C ratio": [], "G ratio": [] };
+            data.forEach(gene => {
+              if (gene.Uratio != null) measurements2["U ratio"].push(gene.Uratio);
+              if (gene.Cratio != null) measurements2["C ratio"].push(gene.Cratio);
+              if (gene.Gratio != null) measurements2["G ratio"].push(gene.Gratio);
+            });
+            const ratioColors = {
+              "U ratio": "rgba(31, 119, 180, 0.8)",
+              "C ratio": "rgba(255, 127, 14, 0.8)",
+              "G ratio": "rgba(44, 160, 44, 0.8)"
+            };
+            const traces2 = [];
+            if (measurements2["U ratio"].length > 0) {
+              traces2.push({
+                type: 'violin',
+                x: Array(measurements2["U ratio"].length).fill("U ratio"),
+                y: measurements2["U ratio"],
+                name: "U ratio",
+                box: { visible: true },
+                meanline: { visible: true },
+                marker: { color: ratioColors["U ratio"] }
+              });
+            }
+            if (measurements2["C ratio"].length > 0) {
+              traces2.push({
+                type: 'violin',
+                x: Array(measurements2["C ratio"].length).fill("C ratio"),
+                y: measurements2["C ratio"],
+                name: "C ratio",
+                box: { visible: true },
+                meanline: { visible: true },
+                marker: { color: ratioColors["C ratio"] }
+              });
+            }
+            if (measurements2["G ratio"].length > 0) {
+              traces2.push({
+                type: 'violin',
+                x: Array(measurements2["G ratio"].length).fill("G ratio"),
+                y: measurements2["G ratio"],
+                name: "G ratio",
+                box: { visible: true },
+                meanline: { visible: true },
+                marker: { color: ratioColors["G ratio"] }
+              });
+            }
+            let layout2 = {
+              title: `nonA residues Ratios`,
+              yaxis: { title: 'Ratio' },
+              font: {family: 'Arial'},
+              legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.1 }
+            };
+            Plotly.newPlot('plot1', traces1, layout1);
+            Plotly.newPlot('plot2', traces2, layout2);
+          }
         })
         .catch(error => {
           console.error("Error:", error);
@@ -806,7 +1018,6 @@
           statusDiv.innerHTML = `<span style="color:red">Error: ${data.error}</span>`;
           return;
         }
-        // 上传后更新 coverImage 的 src 为后端返回的图片 URL（例如 /extract_polyA/xxx_PAL.png）
         coverImage.src = data.plotUrl;
         statusDiv.innerHTML = '<span style="color:green">Processing completed!</span>';
         const link = document.createElement('a');
@@ -826,7 +1037,45 @@
     }
 
     function showHelp() {
-      alert("If you have any question, please contact: ywzhang12345@163.com");
+      clearResults();
+      const helpHTML = `
+        <h2>帮助信息</h2>
+        <ol>
+          <li>
+            <strong>数据简介</strong><br>
+            The Poly(A) Length & Composition Database是一个专注于收集和分析poly(A)尾特征的综合数据库。PALC-DB提供人和小鼠卵母细胞、早期胚胎、组织以及细胞系的poly(A)尾长度以及内部非A残基组成的详细信息，通过整合RNA-seq、Ribo-seq以及poly(A)尾提取分析技术为科研人员提供一个以表观修饰之一的poly(A)尾的角度去理解不同物种、组织、时期基因的表达和翻译变化，帮助科研人员理解poly(A)尾修饰在健康和疾病中重要作用。
+          </li>
+          <li>
+            <strong>用户指南</strong><br>
+            ① <strong>数据库结构</strong><br>
+            <img src="./PALC-help1.png" alt="单个基因检索示意图" style="max-width:100%;"><br>
+            ② <strong>单个基因检索</strong><br>
+            <img src="./PALC-help2.png" alt="单个基因检索示意图" style="max-width:100%;"><br>
+            ③ <strong>多个基因检索</strong><br>
+            <img src="./PALC-help3.png" alt="多个基因检索示意图" style="max-width:100%;"><br>
+            ④ <strong>提取 poly(A)</strong><br>
+            <img src="./PALC-help4.png" alt="提取 poly(A) 示意图" style="max-width:100%;">
+          </li>
+          <li>
+            <strong>元数据资源</strong><br>
+            本数据库收集的公共数据库以及本实验室数据的项目编号：GSE112223、GSE126465、GSE131172、GSE147882、GSE158136、GSE165782、GSE169632、GSE176016、GSE188361、GSE197265、GSE197578、GSE209648、GSE233555、GSE247820、GSE278278、GSE282509、GSE65786、GSE94982、PRJCA006144、CRA004926、PRJCA006438、HRA001288.具体样本所对应的项目号体现在搜索结果中，如下图
+            <img src="./PALC-help5.png" alt="元数据资源示例" style="max-width:100%;"><br>
+          </li>
+          <li>
+            <strong>Contact Us</strong><br>
+            有问题请联系：ywzhang12345@163.com
+          </li>
+        </ol>
+      `;
+      document.getElementById('result').innerHTML = helpHTML;
+    }
+
+    function jumpToSymbol(symbol) {
+      if (igvBrowser) {
+        igvBrowser.search(symbol);
+      } else {
+        alert("IGV is not initialized yet.");
+      }
     }
 
     body.addEventListener("click", function(event) {
